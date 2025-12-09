@@ -1,0 +1,417 @@
+\documentclass[12pt]{labreport}
+\usepackage[utf8]{inputenc}
+\usepackage{amssymb}
+%TC:macro \ref [option:inline,inline] [0]
+%TC:macro \cite [option:text,text] [0]
+%TC:macro \citep [option:text,text] [0]
+%TC:group table 0 1 [0]
+%TC:group tabularx 1 1 [0]
+
+\title{Image Compression via Wavelet Transform, Fourier Transform and PCA}
+\subtitle{AM205 Project}
+\author{Dylan Chua, Christina Wang}
+\date{December 2025}
+
+\begin{document}
+%TC:ignore
+\frontmatter
+\titlepage
+
+\begin{figure*}[h]
+    \centering
+    \begin{subfigure}{0.24\linewidth}
+    \includegraphics[width=\linewidth]{images/face.png}
+    \end{subfigure}%
+    \hfill
+    \centering
+    \begin{subfigure}{0.24\linewidth}
+        \includegraphics[width=\linewidth]{images/face_dwt_50.png}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.24\linewidth}
+        \includegraphics[width=\linewidth]{images/face_dft_50.png}
+    \end{subfigure}%
+    \hfill
+    \begin{subfigure}{0.24\linewidth}
+        \includegraphics[width=\linewidth]{images/face_pca_50.png}
+    \end{subfigure}
+\end{figure*}
+\setcounter{figure}{0}
+
+\vfill
+
+\begin{table*}[h]
+    \renewcommand{\arraystretch}{1.5}
+    \begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash}X}
+        \raggedright
+        \textbf{Textbook Chapter:} &  Fast Fourier Transform, Eigenvalue Problems \\
+        \textbf{Author Contributions:} & Dylan coded the majority of functions in Section \ref{sec:comparison} while Christina coded all of the functions in Section \ref{sec:image_compression}. \newline Both authors roughly contributed equally in writing. \\
+        \textbf{Use of AI:} & Used some built-in assistance in Coding Notebooks. \\
+        \textbf{Other Sources:} & None 
+    \end{tabularx}
+\end{table*}
+
+
+%TC:endignore
+
+\newpage
+\mainmatter
+\section{Image Compression}\label{sec:image_compression}
+Images, in their raw form, are extremely high dimensional. However, most image values in this high dimensional set are either chaotic noise, which matter little to the human eye, or nearly indistinguishable from their neighboring values \cite{Hyvärinen2009}. Typical natural images only take up a small subspace of this large set.
+In other words, natural images represented in their raw form often contain a significant amount of unnecessary information and use excessive computer storage: an 8-bit RGB photo in 4K resolution would require 25 MB \citep{Chlubna2025-zn}. 
+
+A basic statistical analysis on the CIFAR-10 and STL-10 dataset shows this. CIFAR-10 consists of 50000 images of size $32 \times 32$, and STL-10 consists of 5000 images of size $96 \times 96$, and each dataset contains natural images of 10 different classes. The following were performed:
+\\ 1) We flatten each image to a 1D vector, making the dataset a 2D matrix. Then, we conduct PCA on the dataset and analyze at the singular values.
+\\ 2) We convert the image into grayscale, and calculate the average covariance between individual pixels, and analyze them based on the Euclidean distance between the pixels. 
+
+The results of the two datasets are similar, shown in Fig. \ref{fig:imgstats}:
+
+\begin{figure}[ht]
+    \begin{subfigure}{0.4\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{singular_both.png}
+        \caption{Singular values of the first 300 Principal Components}    
+    \end{subfigure}%
+    \hfill
+    \begin{subfigure}{0.4\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/cov_both.png}
+        \caption{Average Covariance between pixels plotted against Euclidean Distance} 
+    \end{subfigure}
+    \caption{Analysis of (a) PCA and (b) covariance on CIFAR-10 and STL-10 datasets}
+    \label{fig:imgstats}
+\end{figure}
+\noindent 1) Singular values decay exponentially, indicating that natural images generally lie in a significantly lower rank space than their raw dimension.
+\\ 2) The average covariance between different pixels is higher when they are of a smaller euclidean distance apart. In other words, pixels are more closely related to their neighbors than to pixels farther away. Representing images in their raw form neglects their underlying structure, thus making it inefficient.
+
+Image compression exploits general trends and structures underlying images, and try to reduce the representation of typical natural images into fewer bits \citep{jpeg_compression}.
+The most intuitive approach of image compression involves decomposing raw image data onto a set of suitable orthonormal basis, then truncate the projected values to represent the original data. Given that general images are smooth, and are of bounded size, Fourier Analysis became the source of the most prominent image compression methods.
+
+Originally, the popular JPEG format uses Discrete Cosine Transform, which makes use of real-valued sinusoids whereas the sinusoids in Discrete Fourier Transform (DFT) are complex-valued \citep{Chlubna2025-zn}. This standard was then superseded by the JPEG 2000 format, which utilizes the Discrete Wavelet Transform (DWT) \citep{jpeg_compression}. 
+In this report, we will introduce the wavelet transforms, and analyze their performance in the domain of natural image compression.
+
+\section{Wavelet Transform}
+To introduce DWT, let us first consider functions in the $L^2(\mathbb{R})$ space, which are functions $f$ such that $\int |f(t)|^2 dt < +\infty$. Inner products on $L^2(\mathbb{R})$ are defined by 
+$\langle f, g \rangle := \int_{-\infty}^{+\infty} f(t) \, g^*(t) \, dt$ \citep{mallat2008wavelet}. 
+The Fourier Transform and Inverse Fourier Transform take the forms
+\begin{align}
+    \hat{f}(\omega) &= \int_{-\infty}^{+\infty} f(t) \, e^{-i\omega t} dt, & f(t) = \frac{1}{2\pi} \int_{-\infty}^{+\infty} \hat{f}(\omega) \, e^{i\omega t} dt
+\end{align}
+
+% This can be seen as a decomposition of $f(t)$ onto the Fourier bases $\{ e^{i 2\pi mt } \}_{m \in \mathbb{Z}}$ of $L^2[a,b]$ on the interval $[a, b]$.
+
+The Fourier Transform is well-suited for uniformly regular signals. However, sharp local changes, e.g. edges, also occur in most images. Capturing these transient phenomena in an image becomes challenging for the Fourier Transform, and many coefficients are needed \citep{mallat2008wavelet}. 
+Fourier bases involve $e^{i\omega t}$, whose support covers all $t \in \mathbb{R}$. The frequencies $\hat{f}(\omega)$ extracted by it also cover all $t \in \mathbb{R}$. Thus, the Fourier Transform performs only a global feature extraction in terms of frequencies, and may struggle to take account of transient, local features that are also important \citep{mallat2008wavelet}.
+
+Whereas the Fourier bases represent uniformly regular signals, the wavelet bases represent piecewise regular signals, which can include transients and singularities. This enables the wavelet bases to be localized in both the time and frequency domain, capturing not only the frequencies present, but also when these frequencies change \citep{mallat2008wavelet}.
+
+A wavelet basis is a family of basis functions ("wavelets") $\psi_n^{(m)}(t)$ derived by translation and dilation of a single "mother wavelet" $\psi(t)$, such that the wavelets $\psi_n^{(n)}$ are linearly independent and span all $L^2(\mathbb{R})$ \citep{jpeg_compression}. The wavelet basis is given by
+\begin{equation}
+    \left\{ \psi_n^{(m)}(t) = \frac{1}{\sqrt{2^m}} \psi \left(\frac{t - 2^m n}{2^m}\right) \right\}_{(n, m) \in \mathbb{Z}^2}
+\end{equation}
+To project data onto a wavelet basis, the Wavelet Transform is the inner product of the function $f$ with each wavelet:
+\begin{equation}
+    \langle f, \psi_n^{(m)}(t) \rangle = \int_{-\infty}^{+\infty} f(t) \, \psi_n^{(m)}(t) dt
+\end{equation}
+and $f$ can then be recovered from:
+\begin{equation}
+    f = \sum_{m=-\infty}^{+\infty} \sum_{n=-\infty}^{+\infty} \langle f, \psi_n^{(m)}(t) \rangle
+\end{equation}
+for orthonormal wavelet bases. The first known mother wavelet is the Haar wavelet. Constructed in 1910, it generates an orthonormal basis with the mother wavelet function:
+\begin{equation}
+    \psi(t) = 
+    \begin{cases}
+        1 \quad& 0 \leq t < \frac{1}{2} \\
+        -1 \quad& \frac{1}{2} \leq t < 1 \\
+        0 \quad& \text{otherwise}
+    \end{cases}
+\end{equation}
+
+The modern JPEG 2000 format uses biorthogonal wavelets to perform compression \citep{jpeg_compression}. Biorthogonal wavelets consist of two different wavelet families $\psi, \tilde{\psi}$ which are not necessarily orthogonal themselves but satisfy biorthogonality:
+\begin{equation}
+    \langle \psi_n^{(m)}, \tilde{\psi}_{\tilde{n}}^{(\tilde{m})} \rangle = \delta_{n, \tilde{n}} \delta_{m, \tilde{m}}
+\end{equation}
+
+In summary, Wavelet Transforms are advantageous as they provide a multiresolution representation of the signal or image, enabling the transform coefficients to capture both the large-scale structures and localized features \citep{daubechies}. In natural images, these local structures are often edges \citep{matlab} and irregular textures \citep{mallat2008wavelet}.
+Images are significantly compressed in this way while maintaining low visual distortion. 
+% An example of DWT compression and analysis is presented in Fig. \ref{fig:demo}, comprising a compressed approximation of the original image, as well as the directional edges of the image.
+
+\section{Compression Methods \& Quality Metrics}
+In this report, we compare the performance of three different compression schemes: PCA, DFT and DWT. Lossy compression is the focus of this report, and other than these transforms, no other forms of external encoding algorithms are used in the process. All images were converted to grayscale before compression.
+
+\lstinline{PyWavelets} \citep{pywt}, \lstinline{NumPy} \citep{numpy}, and \lstinline{scikit-learn} \citep{scikit-learn} were used to perform DWT, DFT and PCA decompositions, respectively, with compression ratios $\text{CR} \in [ 1, 10^4]$. The \lstinline{bior4.4} wavelet family, a biorthogonal wavelet useful for compression \citep{matlab}, was chosen for the DWT.
+
+Compression using DWT and DFT is achieved by selecting a threshold $T$. All coefficients below $T$ are set to 0. PCA compression is achieved by using a rank $k$ approximation of the original image $A$ where $Rank(A) \geq k$.
+
+For all three methods, compression ratios are calculated to determine how much information is preserved given an image with dimensions $m \times n$.
+For DWT and DFT, the compression ratio depends on the ratio of remaining nonzero coefficients, and is given by \citep{BOIX20101265}:
+\begin{equation}
+    \text{CR}_{\text{DWT}} = \text{CR}_{\text{DFT}} = \frac{\# \text{ coefficients}}{\# \text{ nonzero coefficients}}
+    \label{eq:cr_dwt}
+\end{equation}
+For PCA, the compression ratio is the number of pixels used to store the original image over the number of elements used in its rank $k$ approximation, given by:
+\begin{equation}
+    \text{CR}_\text{PCA} = \frac{mn}{k(m+n)}
+    \label{eq:cr_pca}
+\end{equation}
+We quantify the quality of the reconstructed image using two metrics: Peak Signal-to-Noise Ratio (PSNR) and Structural Similarity Index Measure (SSIM). 
+
+The Peak Signal-to-Noise Ratio (PSNR) quantifies reconstruction quality based on the mean squared error between the reconstructed image and the original image \citep{imageMetrics}.
+% \begin{align}
+%     \text{MSE}(f,g) &= \frac{1}{MN} \sum_{i=1}^M \sum_{j=1}^N (f_{i,j} - g_{i,j})^2 \\
+%     \text{PSNR}(f,g) &= 10 \log_{10} \frac{255^2}{\text{MSE}(f,g)}
+% \end{align}
+% where 255 is the maximum for an 8-bit image. 
+For a lossless reconstruction, the PSNR approaches infinity, and the greater the numerical difference between the images, the lower the PSNR.
+
+The Structural Similarity Index Measure (SSIM) is well-known for its correlation to human visual quality perception \citep{imageMetrics}.
+% \begin{align}
+%     % \text{SSIM}(f,g) &= l(f,g) \cdot c(f,g) \cdot s(f,g) \\
+%     % &\begin{cases}
+%     %     l(f,g) &= \frac{2 \mu_f \mu_g + c_1}{\mu_f^2 + \mu_g^2 + c_1} \\
+%     %     c(f,g) &= \frac{2\sigma_f \sigma_g + c_2}{\sigma_f^2 + \sigma_g^2 + c_2} \\
+%     %     s(f,g) &= \frac{\sigma_{fg} + c_3}{\sigma_f \sigma_g + c_3}
+%     % \end{cases}
+%     \text{SSIM}(f,g) = \frac{(2 \mu_f \mu_g + c_1)(2 \sigma_{fg} + c_2)}{(\mu_f^2 + \mu_g^2 + c_1)(\sigma_f^2 + \sigma_g^2 + c_2)}
+% \end{align}
+According to \cite{imageMetrics}, PSNR is more sensitive to Gaussian noise than SSIM, although both metrics are closely correlated. To get a more comprehensive view of performance of the three methods, this report will use both metrics to measure the quality of the reconstructed compressed images.
+
+\section{Comparison Results}\label{sec:comparison}
+% In this experiment, \lstinline{PyWavelets} \citep{pywt}, \lstinline{NumPy} \citep{numpy}, and \lstinline{scikit-learn} \citep{scikit-learn} were used to perform DWT, DFT and PCA decompositions respectively. The \lstinline{bior4.4} wavelet family, a biorthogonal wavelet useful for compression \citep{matlab}, was chosen for the DWT.
+% \\ (1) {High-Res:} 50 images with an average resolution of $1212\times918$ or 1.1 Megapixels; 
+% \\ (2) {Medium Resolution:} 24 images with an average resolution of $704\times576$ or 0.4 Megapixels.
+\vspace{-1em}
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{lrrr}
+        \toprule
+        Dataset & \# of Images & Mean Dimensions $m \times n$ & Mean Resolution \\
+        \midrule
+        \lstinline{subset1} (High-Res) & 50 & $1212\times918$ & 1.1 Megapixels \\
+        \lstinline{Kodak} (Med-Res) & 24 & $704\times576$ & 0.4 Megapixels \\
+        \bottomrule
+    \end{tabular}
+    \caption{Statistics for the two datasets used to perform compression. Both datasets were retrieved from an AVIF comparison of image encoding \citep{dataset}. \vspace{-0.5em}}
+    \label{tab:datasets}
+\end{table}
+
+The three compression methods were performed on both datasets in Table \ref{tab:datasets} and the results are presented in Fig. \ref{fig:dataset_res}. Although the two image metrics yield different values, the trends they show are very similar.
+
+\begin{figure}[ht]
+    \centering
+    \begin{subfigure}{\linewidth}
+        \includegraphics[width=\textwidth]{images/high_res.pdf}
+        \caption{High-Res dataset results for PSNR, SSIM and Time taken}
+    \end{subfigure}
+    \vspace{0.1em} \\
+    \begin{subfigure}{\linewidth}
+        \includegraphics[width=\textwidth]{images/med_res.pdf}
+        \caption{Med-Res dataset results for PSNR, SSIM and Time taken}
+    \end{subfigure}
+    \caption{DWT, DFT and PCA compression with CR $\in [ 1, 10^4]$ on both (a) High-Res and (b) Med-Res datasets (left: \textit{PSNR in dB}; center: \textit{SSIM}; right: \textit{Time taken}). Solid line indicates mean, shaded area shows the $95\%$ confidence interval of the mean. } 
+    \label{fig:dataset_res}
+\end{figure}
+
+\paragraph{CR for PCA has an upper limit much smaller than for DWT and DFT.}
+Based on Equation \ref{eq:cr_pca}, the limit for PCA is $\max \text{CR}_{\text{PCA}} = \frac{mn}{m + n}$ when $k = 1$, whereas DWT and DFT can theoretically reach CR $= \# \text{ coefficients} = O(mn)$. While PCA requires left and right singular vectors with sizes $m$ and $n$ for reconstruction, DFT and DWT only need truncated coefficients, since their basis vectors are fixed values that can be computed on the fly.
+% For instance, the High-Res dataset gives an average $\max \text{CR}_{\text{PCA}}$ of 522, and the Med-Res gives an average $\max \text{CR}_{\text{PCA}}$ of 317. 
+
+\paragraph{Higher image resolutions maintains better PSNR and SSIM.} 
+% With CR between 1 and $10^3$, the High-Res dataset has PSNR values ranging from 65 to 110 dB and SSIM values down to 0.997. On the other hand, the Med-Res dataset has lower PSNR values from 20 to 70 dB and the SSIM values drop to 0.7. 
+With more information, there is likely more redundancy in the image, so compression retains much more information per retained coefficient.
+
+\paragraph{PCA takes significantly more time than DWT and DFT, especially at low CRs.}
+PCA in \lstinline{scikit-learn} uses the LAPACK implementation of Singular Value Decomposition \citep{scikit-learn}, which is computationally expensive and takes $O(mn \min(m,n))$ time \citep{Intel}. At a lower CR and thus higher rank $k$, more principal components must be computed, further increasing runtime. DFT has $O(mn \log (mn))$ runtime, and DWT takes only $O(mn)$ \citep{mallat2008wavelet} (wow!).
+
+\paragraph{Up to CR $\mathbf{< 10^3}$, DWT performs best, followed by DFT, then PCA.} 
+Across both High and Med-Res, and both PSNR and SSIM values, DWT has the highest quality, and PCA consistently is the worst. Fig. \ref{fig:cr500} illustrates this comparison. DWT provides the most efficient representation, as the coefficients are highly sparse. Fig. \ref{fig:sparsity_dwt} shows that most of the coefficients are small in magnitude, so only a fraction is needed to capture most of the information. Fig. \ref{fig:sparsity_dft} displays less sparsity in DFT, as DFT captures only global frequency structure and requires more coefficients to represent local phenomena \citep{mallat2008wavelet}. Lastly, PCA performs the worst as many principal components are necessary to preserve texture and edges. For the same CR, PCA compression removes more essential structure.
+
+\paragraph{DWT performs much worse after CR $\mathbf{\geq 10^3}$ for the High-Res dataset.}
+When the compression ratio is extremely high (reconstructed images are restrained to a poor quality), the reconstruction quality of DWT plummets down, and DFT becomes the leading algorithm.
+
+\subsection{Some examples}
+Reconstruction examples are shown using the image in Fig. \ref{fig:face_original} with CR $\approx 4000, 500, 50$ in Figs. \ref{fig:cr4000}, \ref{fig:cr500}, and \ref{fig:cr50} respectively. From the figures, we can better visualize the overall performance of the PSNR and SSIM curves in Fig. \ref{fig:dataset_res}.
+
+
+\begin{figure}[t]
+    \centering
+        \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\linewidth]{face}
+        \caption{Original image with size $768 \times 1024$}
+        \label{fig:face_original}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\linewidth]{face_dwt_4000}
+        \caption{DWT, PSNR = 10.5 dB, SSIM = 0.10}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\linewidth]{face_dft_4000}
+        \caption{DFT, PSNR = 17.9 dB, SSIM = 0.33 }
+    \end{subfigure}
+    \caption{(a) Original image; Reconstructed from (b) DWT and (c) DFT with CR $\approx$ 4000}
+    \label{fig:cr4000}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\linewidth]{face_dwt}
+        \caption{DWT, PSNR = 20.9 dB, SSIM = 0.41}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\linewidth]{face_dft}
+        \caption{DFT, PSNR = 20.6 dB, SSIM = 0.39}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\linewidth]{face_pca}
+        \caption{PCA, PSNR = 15.5 dB, SSIM = 0.32}
+    \end{subfigure}
+    \caption{Reconstructed images from (a) DWT, (b) DFT and (c) PCA with CR $\approx$ 500}
+    \label{fig:cr500}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\linewidth]{images/face_dwt_50.png}
+        \caption{DWT,  PSNR = 26.3 dB, SSIM = 0.73}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\linewidth]{images/face_dft_50.png}
+        \caption{DFT, PSNR = 24.1 dB, SSIM = 0.59}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.3\linewidth}
+        \includegraphics[width=\linewidth]{images/face_pca_50.png}
+        \caption{PCA, PSNR = 19.1 dB, SSIM: 0.39}
+    \end{subfigure}
+    \caption{Reconstructed images from (a) DWT, (b) DFT and (c) PCA with CR $\approx$ 50}
+    \label{fig:cr50}
+\end{figure}
+
+
+\begin{figure}[t]
+    \centering
+    \begin{subfigure}{0.49\linewidth}
+        \includegraphics[width=\linewidth]{images/dwt_mask.pdf}
+        \caption{DWT coefficients heatmap}
+        \label{fig:sparsity_dwt}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.49\linewidth}
+        \includegraphics[width=\linewidth]{images/dft_mask.pdf}
+        \caption{DFT coefficients heatmap}
+        \label{fig:sparsity_dft}
+    \end{subfigure}
+    \caption{Heatmap of (a) DWT and (b) DFT coefficients of Fig. \ref{fig:face_original} (left: \textit{original coefficients, larger magnitudes are brighter}; right: \textit{remaining coefficients above the threshold for CR = 50 in white})}.
+    \label{fig:sparsity}
+\end{figure}
+
+\paragraph{When CR is very high, we clearly see that DFT reconstructs the image better than DWT.} In Fig. \ref{fig:cr4000}, the highly truncated representation of the DWT only captures local changes in the image, i.e. the edges, making the image appear closer to binary. This is because DWT has basis functions both localized in the time and space domains. Comparatively, DFT reconstructs the image by extracting global low frequencies, so the reconstructed image is significantly smoother and contains much more information than DWT. 
+
+\paragraph{PCA struggles to represent the general structure in intermediate representations, even though the quality metrics seem reasonable.} In Fig. \ref{fig:cr500}, even though PCA results have SSIM $= 0.32$ and PSNR $= 15.5$ dB, and this is even slightly higher than the DWT representation in Fig. \ref{fig:cr4000}, we can barely recognize the content of the image by looking at the reconstruction. Whereas in the highly compressed DWT version, we can still make out a rough idea of what the original image contains.
+
+\paragraph{When CR is low, DFT performs better than DFT and PCA, and captures sharper details.} In Fig. \ref{fig:cr50}, we see that the DFT reconstruction is fuzzier than DWT in general. PCA is still struggling a lot to capture the image content. We see that when CR is low, DWT is more capable of sharper reconstructions than DFT. 
+
+\section{Conclusion}
+
+In summary, we compared three compression techniques (DWT, DFT and PCA) on two distinct datasets of natural images in a wide range of Compression Ratios, and computed quality metrics. Moreover, we viewed an example of actual reconstructed images. We find the following:
+
+\paragraph{DWT is indeed the best for general image compression.} Its runtime is of low complexity; the coefficients are sparse; its quality metric is the highest in most cases; and the actual reconstructed examples indeed look better for a reasonable CR. 
+
+\paragraph{DFT becomes a better choice when computational resources are scarce.} Although DWT has a lower runtime complexity, DFT appears to run slightly faster than DWT in real-world scenarios. Moreover, when CR is extremely high (images must be represented very poorly to speed up computation or save memory), DFT becomes the highest in terms of quality metric, and its reconstructed examples look better than DWT.
+
+\paragraph{PCA performs worst of the three.} Its runtime blows up when CR is low; it exhibits the lowest quality metrics; and even when its quality metrics seem reasonable, the real reconstructed images look very far from the original. PCA is an invaluable tool in multiple subject areas, but appears to be unsuitable for image compression.
+
+
+%TC:ignore
+
+\bibliography{cite}
+
+\backmatter
+\begin{appendices}
+\appendix
+\addtocontents{toc}{\protect\setcounter{tocdepth}{1}}
+
+\section{Code Listings}
+
+The link to the notebook is included here: \href{https://colab.research.google.com/drive/11epiX5Rcz0znSEh9Cu1VF3jZLJ4Lpm5M?usp=sharing}{Google Colab notebook}.
+
+For convenience, the files are also produced in this section below.
+
+\subsection{Image Statistics}
+\lstinputlisting[language=Python, caption={Functions to convert rgb to grayscale, calculate covariance and singular values}]{code/statistic_functions.py}
+\lstinputlisting[language=Python, caption={Computation code on CIFAR-10 and STL-10}]{code/statistic_main.py}
+
+%\newpage
+\subsection{Compression}
+\lstinputlisting[language=Python, caption={DWT, DFT and PCA compression}]{code/compression.py}
+\lstinputlisting[language=Python, caption={Function for plotting means and confidence intervals}]{code/plot_results.py}
+\lstinputlisting[language=Python, caption={Code for Generating Random Images}]{code/generate_random_images.py}
+\lstinputlisting[language=Python, caption={Sample Run for the Datasets}]{code/sample_run.py}
+
+
+\newpage
+\section{Results Not Included in Main Text}
+
+\begin{figure}[ht]
+    \begin{subfigure}{0.24\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/mean_cifar10.png}
+        \caption{Mean of the CIFAR-10 Dataset}    
+    \end{subfigure}%
+    \hfill
+    \begin{subfigure}{0.24\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/mean_stl10.png}
+        \caption{Mean of the STL-10 Dataset} 
+    \end{subfigure}%
+    \hfill
+    \begin{subfigure}{0.24\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/cov_mat_cifar10.png}
+        \caption{Covariance of the CIFAR-10 Dataset} 
+    \end{subfigure}%
+    \hfill
+    \begin{subfigure}{0.24\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/cov_mat_stl10.png}
+        \caption{Covariance of the STL-10 Dataset} 
+    \end{subfigure}
+    \caption{Mean and Covariance of the CIFAR-10 and STL-10 Datasets}
+    \label{fig:mean_cov_imgstats}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\linewidth]{images/face_results.pdf}
+    \caption{Example plot of PSNR, SSIM and Time taken for compression a single image. For the datasets, the mean and the confidence intervals are plotted instead.}
+    \label{fig:face_results}
+\end{figure}
+
+\begin{figure}[ht]
+    \begin{subfigure}{\textwidth}
+    \centering
+    \includegraphics[width=0.3\linewidth]{images/random_example.png}
+    \caption{Example of a random generated Image of size $1024\times 1024$, each pixel is sampled iid from Uniform Distribution bounded $[0, 1]$.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{images/random.png}
+        \caption{Example plot of PSNR, SSIM and Time taken for compression for 30 random generated image samples of size $1024\times 1024$.} 
+    \end{subfigure}
+    \caption{Example of a random generated image and result plot of PSNR, SSIM and Time taken for compression for a set of random generated image samples.}
+    \label{fig:random_results}
+\end{figure}
+
+
+
+\end{appendices}
+%TC:endignore
+\end{document}
