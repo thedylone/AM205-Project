@@ -60,9 +60,11 @@
 Images, in their raw form, are extremely high dimensional. However, most image values in this high dimensional set are either chaotic noise, which matter little to the human eye, or nearly indistinguishable from their neighboring values \cite{Hyvärinen2009}. Typical natural images only take up a small subspace of this large set.
 In other words, natural images represented in their raw form often contain a significant amount of unnecessary information and use excessive computer storage: an 8-bit RGB photo in 4K resolution would require 25 MB \citep{Chlubna2025-zn}. 
 
-A basic statistical analysis on the CIFAR-10 and STL-10 dataset shows this. CIFAR-10 consists of 50000 images of size $32 \times 32$, and STL-10 consists of 5000 images of size $96 \times 96$, and each dataset contains natural images of 10 different classes. The following were performed:
-\\ 1) We flatten each image to a 1D vector, making the dataset a 2D matrix. Then, we conduct PCA on the dataset and analyze at the singular values.
-\\ 2) We convert the image into grayscale, and calculate the average covariance between individual pixels, and analyze them based on the Euclidean distance between the pixels. 
+A basic statistical analysis on the CIFAR-10 and STL-10 dataset shows this. CIFAR-10 consists of 50000 images of size $32 \times 32$, and STL-10 contains 5000 images of size $96 \times 96$, and each dataset contains natural images of 10 different classes. The following were performed:
+\begin{enumerate}[noitemsep, topsep=0pt, label=(\alph*)]
+    \item We flatten each image to a 1D vector, making the dataset a 2D matrix. Then, we conduct Principal Component Analysis (PCA) on it and analyze the singular values.
+    \item We convert the image into grayscale, and calculate the average covariance between individual pixels, and analyze them based on the Euclidean distance between the pixels. 
+\end{enumerate}
 
 The results of the two datasets are similar, shown in Fig. \ref{fig:imgstats}:
 
@@ -81,8 +83,10 @@ The results of the two datasets are similar, shown in Fig. \ref{fig:imgstats}:
     \caption{Analysis of (a) PCA and (b) covariance on CIFAR-10 and STL-10 datasets}
     \label{fig:imgstats}
 \end{figure}
-\noindent 1) Singular values decay exponentially, indicating that natural images generally lie in a significantly lower rank space than their raw dimension.
-\\ 2) The average covariance between different pixels is higher when they are of a smaller euclidean distance apart. In other words, pixels are more closely related to their neighbors than to pixels farther away. Representing images in their raw form neglects their underlying structure, thus making it inefficient.
+\begin{enumerate}[noitemsep, topsep=0pt, label=(\alph*)]
+    \item Singular values decay exponentially, indicating that natural images generally lie in a significantly lower rank space than their raw dimension.
+    \item The average covariance between different pixels is higher when they are of a smaller euclidean distance apart. In other words, pixels are more closely related to their neighbors than to pixels farther away. Representing images in their raw form neglects their underlying structure, thus making it inefficient. 
+\end{enumerate}
 
 Image compression exploits general trends and structures underlying images, and try to reduce the representation of typical natural images into fewer bits \citep{jpeg_compression}.
 The most intuitive approach of image compression involves decomposing raw image data onto a set of suitable orthonormal basis, then truncate the projected values to represent the original data. Given that general images are smooth, and are of bounded size, Fourier Analysis became the source of the most prominent image compression methods.
@@ -308,7 +312,7 @@ Reconstruction examples are shown using the image in Fig. \ref{fig:face_original
         \caption{DFT coefficients heatmap}
         \label{fig:sparsity_dft}
     \end{subfigure}
-    \caption{Heatmap of (a) DWT and (b) DFT coefficients of Fig. \ref{fig:face_original} (left: \textit{original coefficients, larger magnitudes are brighter}; right: \textit{remaining coefficients above the threshold for CR = 50 in white})}.
+    \caption{Heatmap of (a) DWT and (b) DFT coefficients of Fig. \ref{fig:cr50} (left: \textit{original coefficients, larger magnitudes are brighter}; right: \textit{remaining coefficients above the threshold for CR = 50 in white})}.
     \label{fig:sparsity}
 \end{figure}
 
@@ -320,7 +324,7 @@ Reconstruction examples are shown using the image in Fig. \ref{fig:face_original
 
 \section{Conclusion}
 
-In summary, we compared three compression techniques (DWT, DFT and PCA) on two distinct datasets of natural images in a wide range of Compression Ratios, and computed quality metrics. Moreover, we viewed an example of actual reconstructed images. We find the following:
+In summary, we compared three compression techniques (DWT, DFT and PCA) on two distinct datasets of natural images in a wide range of Compression Ratios, and computed their quality metrics. Moreover, we viewed an example of actual reconstructed images. We find the following:
 
 \paragraph{DWT is indeed the best for general image compression.} Its runtime is of low complexity; the coefficients are sparse; its quality metric is the highest in most cases; and the actual reconstructed examples indeed look better for a reasonable CR. 
 
@@ -333,6 +337,7 @@ In summary, we compared three compression techniques (DWT, DFT and PCA) on two d
 
 \bibliography{cite}
 
+\newpage
 \backmatter
 \begin{appendices}
 \appendix
@@ -342,7 +347,9 @@ In summary, we compared three compression techniques (DWT, DFT and PCA) on two d
 
 The link to the notebook is included here: \href{https://colab.research.google.com/drive/11epiX5Rcz0znSEh9Cu1VF3jZLJ4Lpm5M?usp=sharing}{Google Colab notebook}.
 
-For convenience, the files are also produced in this section below.
+\noindent The link to the GitHub repository is: \href{https://github.com/thedylone/AM205-Project}{https://github.com/thedylone/AM205-Project}.
+
+\noindent For convenience, the files are also produced in this section below.
 
 \subsection{Image Statistics}
 \lstinputlisting[language=Python, caption={Functions to convert rgb to grayscale, calculate covariance and singular values}]{code/statistic_functions.py}

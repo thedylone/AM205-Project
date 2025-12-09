@@ -2,9 +2,9 @@
 
 import os
 import pickle
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 import numpy as np
-from compression import run_compression_experiment
+from compression import eval_compressions, methods
 
 
 ratios = np.logspace(0, 4, 100)[1:]  # Compression ratios from 10^0 to 10^4
@@ -28,12 +28,11 @@ def compress_images(images, crs, results_files):
             time_results = pickle.load(f)
         return psnr_results, ssim_results, time_results
 
-    methods = ["DWT", "DFT", "PCA"]
     psnr_results = {m: [] for m in methods}
     ssim_results = {m: [] for m in methods}
     time_results = {m: [] for m in methods}
     for img in tqdm(images, leave=False, desc="images"):
-        psnr_res, ssim_res, time_res = run_compression_experiment(img, crs)
+        psnr_res, ssim_res, time_res = eval_compressions(img, crs)
         for method in methods:
             psnr_results[method] += psnr_res[method]
             ssim_results[method] += ssim_res[method]

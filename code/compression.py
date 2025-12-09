@@ -8,7 +8,10 @@ from numpy.fft import fft2, ifft2, fftshift, ifftshift
 from sklearn.decomposition import PCA
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
-from tqdm.notebook import tqdm
+from tqdm import tqdm
+
+
+methods = ["DWT", "DFT", "PCA"]
 
 
 def dwt_compression(
@@ -137,7 +140,7 @@ def pca_compression(img, ratios, plot=False):
     return pca_ratio, pca_psnr, pca_ssim, pca_time
 
 
-def run_compression_experiment(img, ratios):
+def eval_compressions(img, ratios):
     """Run compression experiments using DWT, DFT, and PCA.
     Args:
         img (ndarray): Input image.

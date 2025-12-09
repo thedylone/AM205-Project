@@ -5,7 +5,7 @@
 \RequirePackage[letterpaper, margin=1in]{geometry}
 \RequirePackage{setspace}
 \RequirePackage{floatrow}
-\RequirePackage[hidelinks]{hyperref}
+\RequirePackage[colorlinks=true]{hyperref}
 \RequirePackage{enumitem}
 \RequirePackage{calc}
 \RequirePackage{amsmath}
